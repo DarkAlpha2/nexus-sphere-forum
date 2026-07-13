@@ -1,15 +1,6 @@
 const express = require('express');
 const cors = require('cors');
 const { Pool } = require('pg');
-// Automatically create users table if it doesn't exist
-pool.query(`
-  CREATE TABLE IF NOT EXISTS users (
-    id SERIAL PRIMARY KEY,
-    username VARCHAR(255) UNIQUE NOT NULL,
-    password VARCHAR(255) NOT NULL
-  );
-`).then(() => console.log("🟢 SYSTEM CHECK: 'users' table verified/created."))
-  .catch(err => console.error("🔴 SYSTEM CHECK FAILED:", err));
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 require('dotenv').config();
@@ -28,6 +19,17 @@ const pool = new Pool({
     rejectUnauthorized: false // This prevents live cloud connection rejections
   }
 });
+
+// Automatically create users table if it doesn't exist
+pool.query(`
+  CREATE TABLE IF NOT EXISTS users (
+    id SERIAL PRIMARY KEY,
+    username VARCHAR(255) UNIQUE NOT NULL,
+    password_hash VARCHAR(255) NOT NULL
+  );
+`)
+.then(() => console.log("🟢 SYSTEM CHECK: 'users' table verified/created."))
+.catch(err => console.error("🔴 SYSTEM CHECK FAILED:", err));
 
 // ==========================================
 // AUTHENTICATION ROUTES (Register & Login)
@@ -57,7 +59,7 @@ app.post('/api/register', async (req, res) => {
 
     res.status(201).json({ message: 'User registered successfully!' });
   } catch (error) {
-    console.error("REGISTRATION DATABASE ERROR:", error); // <-- Add this!
+    console.error("REGISTRATION DATABASE ERROR:", error);
     res.status(500).json({ error: 'Authentication Failed', details: error.message });
   }
 });
@@ -96,105 +98,11 @@ app.post('/api/login', async (req, res) => {
   }
 });
 
-
 // ==========================================
 // CORE FORUM ROUTES
 // ==========================================
 
-// FETCH ALL POSTS (With comments and explicit category selections)
-app.get('/api/posts', async (req, res) => {
-  try {
-    const result = await pool.query(`
-      SELECT p.id, p.username, p.title, p.content, p.category, p.created_at,
-             COALESCE(json_agg(c.* ORDER BY c.created_at ASC) FILTER (WHERE c.id IS NOT NULL), '[]') AS comments
-      FROM posts p
-      LEFT JOIN comments c ON p.id = c.post_id
-      GROUP BY p.id, p.username, p.title, p.content, p.category, p.created_at
-      ORDER BY p.created_at DESC;
-    `);
-    res.json(result.rows);
-  } catch (err) {
-    console.error(err.message);
-    res.status(500).send('Server Error');
-  }
-});
-
-// CREATE A NEW POST WITH CATEGORY
-app.post('/api/posts', async (req, res) => {
-  try {
-    const { username, title, content, category } = req.body;
-    const selectedCategory = category || '🚀 Startups'; 
-    
-    const newPost = await pool.query(
-      'INSERT INTO posts (username, title, content, category) VALUES($1, $2, $3, $4) RETURNING *',
-      [username, title, content, selectedCategory]
-    );
-    res.json(newPost.rows[0]);
-  } catch (err) {
-    console.error(err.message);
-    res.status(500).send('Server Error');
-  }
-});
-
-// CREATE A NEW COMMENT
-app.post('/api/posts/:id/comments', async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { username, content } = req.body;
-    
-    const newComment = await pool.query(
-      'INSERT INTO comments (post_id, username, content) VALUES($1, $2, $3) RETURNING *',
-      [id, username, content]
-    );
-    res.json(newComment.rows[0]);
-  } catch (err) {
-    console.error(err.message);
-    res.status(500).send('Server Error');
-  }
-});
-
-// CREATE A NEW POST WITH CATEGORY
-app.post('/api/posts', async (req, res) => {
-  try {
-    const { username, title, content, category } = req.body;
-    // We default to '🚀 Startups' if no category is passed
-    const selectedCategory = category || '🚀 Startups'; 
-    
-    const newPost = await pool.query(
-      'INSERT INTO posts (username, title, content, category) VALUES($1, $2, $3, $4) RETURNING *',
-      [username, title, content, selectedCategory]
-    );
-    res.json(newPost.rows[0]);
-  } catch (err) {
-    console.error(err.message);
-    res.status(500).send('Server Error');
-  }
-});
-
-// CREATE A NEW COMMENT
-app.post('/api/posts/:id/comments', async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { username, content } = req.body;
-    
-    const newComment = await pool.query(
-      'INSERT INTO comments (post_id, username, content) VALUES($1, $2, $3) RETURNING *',
-      [id, username, content]
-    );
-    res.json(newComment.rows[0]);
-  } catch (err) {
-    console.error(err.message);
-    res.status(500).send('Server Error');
-  }
-});
-
-const PORT = process.env.PORT || 5000; 
-
-app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
-});
-
-// FETCH ALL POSTS WITH SCORES
+// FETCH ALL POSTS WITH SCORES AND COMMENTS
 app.get('/api/posts', async (req, res) => {
   try {
     const result = await pool.query(`
@@ -212,7 +120,7 @@ app.get('/api/posts', async (req, res) => {
   }
 });
 
-// CREATE POST WITH OPTIONAL IMAGE
+// CREATE POST WITH OPTIONAL IMAGE AND CATEGORY
 app.post('/api/posts', async (req, res) => {
   try {
     const { username, title, content, category, imageUrl } = req.body;
@@ -230,49 +138,24 @@ app.post('/api/posts', async (req, res) => {
   }
 });
 
-// UPVOTE / DOWNVOTE ROUTE
-app.patch('/api/posts/:id/vote', async (req, res) => {
+// CREATE A NEW COMMENT
+app.post('/api/posts/:id/comments', async (req, res) => {
   try {
     const { id } = req.params;
-    const { direction } = req.body; // 'up' or 'down'
-    const value = direction === 'up' ? 1 : -1;
-
-    const updated = await pool.query(
-      'UPDATE posts SET score = score + $1 WHERE id = $2 RETURNING *',
-      [value, id]
+    const { username, content } = req.body;
+    
+    const newComment = await pool.query(
+      'INSERT INTO comments (post_id, username, content) VALUES($1, $2, $3) RETURNING *',
+      [id, username, content]
     );
-    res.json(updated.rows[0]);
+    res.json(newComment.rows[0]);
   } catch (err) {
     console.error(err.message);
     res.status(500).send('Server Error');
   }
 });
 
-// ADMINISTRATIVE DELETE ROUTE
-app.delete('/api/posts/:id', async (req, res) => {
-  try {
-    const { id } = req.params;
-    
-    // First, clear associated comments to satisfy foreign key constraints
-    await pool.query('DELETE FROM comments WHERE post_id = $1', [id]);
-    
-    // Delete the target post
-    const result = await pool.query('DELETE FROM posts WHERE id = $1 RETURNING *', [id]);
-    
-    if (result.rows.length === 0) {
-      return res.status(404).json({ message: "Thread node not found." });
-    }
-    
-    res.json({ message: "Thread node securely terminated from database.", deletedPost: result.rows[0] });
-  } catch (err) {
-    console.error(err.message);
-    res.status(500).send('Administrative Server Error');
-  }
-});
-
-// backend/server.js
-
-// PATCH route to handle thread voting increments/decrements
+// PATCH ROUTE TO HANDLE THREAD VOTING INCREMENTS/DECREMENTS
 app.patch('/api/posts/:id/vote', async (req, res) => {
   const { id } = req.params;
   const { direction } = req.body; // 'up' or 'down'
@@ -302,4 +185,35 @@ app.patch('/api/posts/:id/vote', async (req, res) => {
     console.error("Database voting execution error:", error);
     res.status(500).json({ error: "Internal server database modification failure." });
   }
+});
+
+// ADMINISTRATIVE DELETE ROUTE
+app.delete('/api/posts/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    // First, clear associated comments to satisfy foreign key constraints
+    await pool.query('DELETE FROM comments WHERE post_id = $1', [id]);
+    
+    // Delete the target post
+    const result = await pool.query('DELETE FROM posts WHERE id = $1 RETURNING *', [id]);
+    
+    if (result.rows.length === 0) {
+      return res.status(404).json({ message: "Thread node not found." });
+    }
+    
+    res.json({ message: "Thread node securely terminated from database.", deletedPost: result.rows[0] });
+  } catch (err) {
+    console.error(err.message);
+    res.status(500).send('Administrative Server Error');
+  }
+});
+
+// ==========================================
+// SERVER INITIALIZATION
+// ==========================================
+const PORT = process.env.PORT || 10000; // Updated to 10000 to match Render's target port environment
+
+app.listen(PORT, () => {
+  console.log(`==> Server running securely on port ${PORT}`);
 });
