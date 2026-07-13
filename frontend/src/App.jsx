@@ -1,12 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 
-const BACKEND_URL = import.meta.env.DATABASE_URL || 'https://nexus-sphere-backend.onrender.com';
+const BACKEND_URL = import.meta.env.API_URL || 'https://nexus-sphere-backend.onrender.com';
 const CATEGORIES = ['🚀 Startups', '💰 Finance', '📈 Marketing', '🤖 Tech & AI', '☕ Lounge'];
 
 function App() {
   const [posts, setPosts] = useState([]);
-  const [title, setTitle] = useState('');
+  const [title, setTitle] = useState(''); 
   const [content, setContent] = useState('');
   const [imageUrl, setImageUrl] = useState('');
   const [postCategory, setPostCategory] = useState('🚀 Startups');
@@ -40,7 +40,7 @@ function App() {
 
   const fetchPosts = async () => {
     try {
-      const response = await axios.get(`${BACKEND_URL}/posts`);
+      const response = await axios.get(`${BACKEND_URL}/api/posts`);
       setPosts(response.data.map(p => ({ ...p, comments: p.comments || [] })));
     } catch (error) {
       console.error(error);
@@ -49,7 +49,7 @@ function App() {
 
   const handleVote = async (postId, direction) => {
     try {
-      await axios.patch(`${BACKEND_URL}/posts/${postId}/vote`, { direction });
+      await axios.patch(`${BACKEND_URL}/api/posts/${postId}/vote`, { direction });
       fetchPosts();
     } catch (error) {
       console.error("Voting failed", error);
@@ -65,7 +65,7 @@ function App() {
     const finalTitle = isAdminMode ? `🚨 [OFFICIAL ANNOUNCEMENT] ${title}` : title;
 
     try {
-      await axios.post(`${BACKEND_URL}/posts`, { 
+      await axios.post(`${BACKEND_URL}/api/posts`, { 
         username: isAdminMode ? `${currentUser} (Admin)` : currentUser, 
         title: finalTitle, 
         content, 
@@ -83,7 +83,7 @@ function App() {
   const handleRemovePost = async (postId) => {
     if (!window.confirm("CRITICAL WARNING: Are you certain you want to purge this entire thread node and its comments?")) return;
     try {
-      await axios.delete(`${BACKEND_URL}/posts/${postId}`);
+      await axios.delete(`${BACKEND_URL}/api/posts/${postId}`);
       fetchPosts(); // Instant live refresh
     } catch (error) {
       console.error("Purging action failed", error);
@@ -96,7 +96,7 @@ function App() {
     const txt = commentInputs[postId];
     if (!txt) return;
     try {
-      await axios.post(`${BACKEND_URL}/posts/${postId}/comments`, { username: currentUser, content: txt });
+      await axios.post(`${BACKEND_URL}/api/posts/${postId}/comments`, { username: currentUser, content: txt });
       setCommentInputs(p => ({ ...p, [postId]: '' }));
       fetchPosts();
     } catch (error) {
@@ -108,15 +108,18 @@ function App() {
     e.preventDefault();
     try {
       if (authMode === 'register') {
-        const res = await axios.post(`${BACKEND_URL}/register`, { username: authUsername, password: authPassword });
+        const res = await axios.post(`${BACKEND_URL}/api/register`, { username: authUsername, password: authPassword });
         alert(res.data.message); setAuthMode('login');
       } else {
-        const res = await axios.post(`${BACKEND_URL}/login`, { username: authUsername, password: authPassword });
+        const res = await axios.post(`${BACKEND_URL}/api/login`, { username: authUsername, password: authPassword });
         localStorage.setItem('nexus_token', res.data.token);
         localStorage.setItem('nexus_user', res.data.username);
         setCurrentUser(res.data.username); setIsLoggedIn(true);
       }
-    } catch (err) { alert("Authentication failed"); }
+    } catch (err) { 
+      console.error("Auth error details:", err);
+      alert(err.response?.data?.error || "Authentication failed"); 
+    }
   };
 
   const filteredPosts = selectedFilter === 'All' ? posts : posts.filter(p => p.category === selectedFilter);
@@ -168,9 +171,11 @@ function App() {
           <h2 style={{ letterSpacing: '-0.03em', margin: '0 0 6px 0', color: '#fff' }}>NexusSphere</h2>
           <p style={{ color: '#64748b', fontSize: '0.85rem', marginBottom: '24px' }}>Secure Network Entry</p>
           <form onSubmit={handleAuthSubmit} style={styles.form}>
-            <input type="text" placeholder="Username Identity" value={authUsername} onChange={(e) => setAuthUsername(e.target.value)} style={styles.input} />
-            <input type="password" placeholder="Security Passphrase" value={authPassword} onChange={(e) => setAuthPassword(e.target.value)} style={styles.input} />
-            <button type="submit" style={styles.btnPrimary}>Establish Interface Connection</button>
+            <input type="text" placeholder="Username Identity" value={authUsername} onChange={(e) => setAuthUsername(e.target.value)} style={styles.input} required />
+            <input type="password" placeholder="Security Passphrase" value={authPassword} onChange={(e) => setAuthPassword(e.target.value)} style={styles.input} required />
+            <button type="submit" style={styles.btnPrimary}>
+              {authMode === 'login' ? 'Establish Interface Connection' : 'Register Profile Credentials'}
+            </button>
           </form>
           <p onClick={() => setAuthMode(authMode === 'login' ? 'register' : 'login')} style={styles.toggleLink}>
             {authMode === 'login' ? "Register profile credentials" : "Return to account login"}
@@ -211,7 +216,7 @@ function App() {
         <div style={styles.modalOverlay} onClick={() => setShowCreateForm(false)}>
           <div 
             style={isAdminMode ? styles.glassFormCardAdmin : styles.glassFormCard} 
-            onClick={(e) => e.stopPropagation()} // Prevents closing modal when clicking inside it
+            onClick={(e) => e.stopPropagation()} 
           >
             {/* Modal Header */}
             <div style={styles.modalHeader}>
@@ -382,7 +387,6 @@ const styles = {
   searchBar: { width: '100%', padding: '8px 16px', borderRadius: '20px', backgroundColor: '#141c2c', border: '1px solid #273549', color: '#fff', outline: 'none', fontSize: '0.88rem' },
   navActions: { display: 'flex', alignItems: 'center', gap: '14px' },
   
-  // Create Post Buttons (Upgraded look)
   btnCreate: { backgroundColor: '#2563eb', color: '#fff', border: 'none', padding: '8px 18px', borderRadius: '20px', fontWeight: '600', fontSize: '0.85rem', cursor: 'pointer', boxShadow: '0 4px 12px rgba(37, 99, 235, 0.2)', transition: 'all 0.2s' },
   btnCreateAdmin: { backgroundColor: '#ef4444', color: '#fff', border: 'none', padding: '8px 18px', borderRadius: '20px', fontWeight: '600', fontSize: '0.85rem', cursor: 'pointer', boxShadow: '0 4px 12px rgba(239, 68, 68, 0.3)', transition: 'all 0.2s' },
 
@@ -392,10 +396,8 @@ const styles = {
   userTag: { fontSize: '0.85rem', color: '#94a3b8', fontWeight: '600' },
   btnExit: { background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', fontSize: '0.85rem' },
   
-  // LINKEDIN STYLE BLURRED BACKGROUND OVERLAY
   modalOverlay: { position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(5, 8, 15, 0.75)', backdropFilter: 'blur(10px)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000, animation: 'fadeIn 0.2s ease-out' },
   
-  // FLOATING 3D MODAL CARDS
   glassFormCard: { background: '#111827', border: '1px solid #374151', padding: '24px', borderRadius: '16px', display:'flex', flexDirection:'column', gap:'16px', width: '100%', maxWidth: '600px', boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.7)', transform: 'translateY(0)', animation: 'slideUp 0.3s cubic-bezier(0.34, 1.56, 0.64, 1)' },
   glassFormCardAdmin: { background: '#171216', border: '1px solid rgba(239, 68, 68, 0.3)', padding: '24px', borderRadius: '16px', display:'flex', flexDirection:'column', gap:'16px', width: '100%', maxWidth: '600px', boxShadow: '0 25px 50px -12px rgba(239, 68, 68, 0.15)', transform: 'translateY(0)', animation: 'slideUp 0.3s cubic-bezier(0.34, 1.56, 0.64, 1)' },
   
