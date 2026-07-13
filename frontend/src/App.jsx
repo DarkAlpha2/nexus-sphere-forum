@@ -15,7 +15,7 @@ function App() {
   const [expandedThreads, setExpandedThreads] = useState({});
   const [showCreateForm, setShowCreateForm] = useState(false);
 
-  // Administrative Clearance Control States
+  // Administrative Clearance Control States (Kept internally for backend safety, button removed from UI)
   const [isAdminMode, setIsAdminMode] = useState(false);
 
   // Dynamic hover tracking for side navigation items
@@ -40,10 +40,17 @@ function App() {
 
   const fetchPosts = async () => {
     try {
+      // Adjusted to try matching your backend's expected endpoints
       const response = await axios.get(`${BACKEND_URL}/api/posts`);
       setPosts(response.data.map(p => ({ ...p, comments: p.comments || [] })));
     } catch (error) {
-      console.error(error);
+      // Fallback try if your backend mounts posts directly at root without /api
+      try {
+        const response = await axios.get(`${BACKEND_URL}/posts`);
+        setPosts(response.data.map(p => ({ ...p, comments: p.comments || [] })));
+      } catch (err) {
+        console.error("Could not fetch posts from either endpoint", err);
+      }
     }
   };
 
@@ -52,42 +59,60 @@ function App() {
       await axios.patch(`${BACKEND_URL}/api/posts/${postId}/vote`, { direction });
       fetchPosts();
     } catch (error) {
-      console.error("Voting failed", error);
+      try {
+        await axios.patch(`${BACKEND_URL}/posts/${postId}/vote`, { direction });
+        fetchPosts();
+      } catch (err) {
+        console.error("Voting failed", err);
+      }
     }
   };
 
-  // ADDING THREADS (Normal or Official Admin Announcements)
+  // ADDING THREADS
   const handlePostSubmit = async (e) => {
     e.preventDefault();
     if (!title || !content) return alert("Please fill out title and content fields.");
     
-    // If Admin Mode is active, prepend an official badge label to the broadcast headline
     const finalTitle = isAdminMode ? `🚨 [OFFICIAL ANNOUNCEMENT] ${title}` : title;
 
+    const postPayload = { 
+      username: isAdminMode ? `${currentUser} (Admin)` : currentUser, 
+      title: finalTitle, 
+      content, 
+      category: postCategory, 
+      imageUrl 
+    };
+
     try {
-      await axios.post(`${BACKEND_URL}/api/posts`, { 
-        username: isAdminMode ? `${currentUser} (Admin)` : currentUser, 
-        title: finalTitle, 
-        content, 
-        category: postCategory, 
-        imageUrl 
-      });
+      await axios.post(`${BACKEND_URL}/api/posts`, postPayload);
       setTitle(''); setContent(''); setImageUrl(''); setShowCreateForm(false);
       fetchPosts();
     } catch (error) {
-      console.error(error);
+      // Fallback to non-API route if your backend setup requires it
+      try {
+        await axios.post(`${BACKEND_URL}/posts`, postPayload);
+        setTitle(''); setContent(''); setImageUrl(''); setShowCreateForm(false);
+        fetchPosts();
+      } catch (err) {
+        console.error("Creating post failed", err);
+        alert("Failed to submit post. Check your console or server logs.");
+      }
     }
   };
 
-  // REMOVING THREADS (Administrative Wipe Function)
+  // REMOVING THREADS
   const handleRemovePost = async (postId) => {
-    if (!window.confirm("CRITICAL WARNING: Are you certain you want to purge this entire thread node and its comments?")) return;
+    if (!window.confirm("CRITICAL WARNING: Are you certain you want to purge this entire thread node?")) return;
     try {
       await axios.delete(`${BACKEND_URL}/api/posts/${postId}`);
-      fetchPosts(); // Instant live refresh
+      fetchPosts();
     } catch (error) {
-      console.error("Purging action failed", error);
-      alert("Failed to delete post node.");
+      try {
+        await axios.delete(`${BACKEND_URL}/posts/${postId}`);
+        fetchPosts();
+      } catch (err) {
+        console.error("Purging action failed", err);
+      }
     }
   };
 
@@ -100,7 +125,13 @@ function App() {
       setCommentInputs(p => ({ ...p, [postId]: '' }));
       fetchPosts();
     } catch (error) {
-      console.error(error);
+      try {
+        await axios.post(`${BACKEND_URL}/posts/${postId}/comments`, { username: currentUser, content: txt });
+        setCommentInputs(p => ({ ...p, [postId]: '' }));
+        fetchPosts();
+      } catch (err) {
+        console.error(err);
+      }
     }
   };
 
@@ -187,7 +218,7 @@ function App() {
 
   return (
     <div style={styles.appContainer}>
-      {/* NAVBAR WITH ADMIN MODE OVERLAY PANEL */}
+      {/* NAVBAR */}
       <nav style={styles.navbar}>
         <div style={styles.navContainerInner}>
           <div style={styles.navLogo}>Nexus<span style={{color:'#3b82f6'}}>Sphere</span></div>
@@ -195,15 +226,9 @@ function App() {
             <input type="text" placeholder="Search threads, discussions, or topics..." style={styles.searchBar} />
           </div>
           <div style={styles.navActions}>
-            <button 
-              onClick={() => setIsAdminMode(!isAdminMode)} 
-              style={isAdminMode ? styles.adminBadgeActive : styles.adminBadgeDisabled}
-            >
-              {isAdminMode ? '🛡️ Admin Mode: ON' : '⚙️ Toggle Admin Mode'}
-            </button>
-
-            <button onClick={() => setShowCreateForm(true)} style={isAdminMode ? styles.btnCreateAdmin : styles.btnCreate}>
-              {isAdminMode ? '📢 + Create Announcement' : '+ Create Post'}
+            {/* ADMIN BUTTON PERMANENTLY REMOVED FROM PUBLIC VIEW HERE */}
+            <button onClick={() => setShowCreateForm(true)} style={styles.btnCreate}>
+              + Create Post
             </button>
             <span style={styles.userTag}>u/{currentUser}</span>
             <button onClick={() => { localStorage.clear(); setIsLoggedIn(false); }} style={styles.btnExit}>Logout</button>
@@ -211,14 +236,10 @@ function App() {
         </div>
       </nav>
 
-      {/* LINKEDIN-STYLE BLURRED MODAL OVERLAY */}
+      {/* CREATE FORM MODAL */}
       {showCreateForm && (
         <div style={styles.modalOverlay} onClick={() => setShowCreateForm(false)}>
-          <div 
-            style={isAdminMode ? styles.glassFormCardAdmin : styles.glassFormCard} 
-            onClick={(e) => e.stopPropagation()} 
-          >
-            {/* Modal Header */}
+          <div style={styles.glassFormCard} onClick={(e) => e.stopPropagation()}>
             <div style={styles.modalHeader}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                 <div style={styles.avatarCircle}>{currentUser[0]?.toUpperCase()}</div>
@@ -230,10 +251,9 @@ function App() {
               <button style={styles.closeModalBtn} onClick={() => setShowCreateForm(false)}>✕</button>
             </div>
 
-            {/* Modal Body / Form */}
             <form onSubmit={handlePostSubmit} style={styles.form}>
               <h3 style={{ margin: '4px 0 8px 0', fontSize: '1.2rem', color: '#fff', fontWeight: '700', letterSpacing: '-0.02em' }}>
-                {isAdminMode ? '🛡️ Broadcast System Announcement' : 'What is on your mind?'}
+                What is on your mind?
               </h3>
               
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 180px', gap: '12px' }}>
@@ -248,9 +268,7 @@ function App() {
               
               <div style={styles.modalFooter}>
                 <button type="button" onClick={() => setShowCreateForm(false)} style={styles.btnCancel}>Cancel</button>
-                <button type="submit" style={isAdminMode ? styles.btnPrimaryAdmin : styles.btnPrimary}>
-                  {isAdminMode ? 'Deploy Announcement' : 'Post Broadcast'}
-                </button>
+                <button type="submit" style={styles.btnPrimary}>Post Broadcast</button>
               </div>
             </form>
           </div>
@@ -292,15 +310,12 @@ function App() {
             const isExpanded = !!expandedThreads[post.id];
             return (
               <div key={post.id} style={styles.redditCard}>
-                
-                {/* INTERACTIVE INTEGRATED VOTE COLUMN */}
                 <div style={styles.voteColumn}>
                   <button onClick={() => handleVote(post.id, 'up')} style={styles.voteBtn}>▲</button>
                   <span style={styles.voteScore}>{post.score}</span>
                   <button onClick={() => handleVote(post.id, 'down')} style={styles.voteBtn}>▼</button>
                 </div>
 
-                {/* THREAD CONTENT VIEWPORT SECTION */}
                 <div style={styles.cardMainContent}>
                   <div style={styles.cardMetadata}>
                     <span style={styles.categoryPill}>{post.category}</span>
@@ -318,26 +333,13 @@ function App() {
                     </div>
                   )}
 
-                  {/* THREAD ACTION PANEL WITH MOD PURGE SWITCHES */}
                   <div style={styles.actionBar}>
                     <button onClick={() => setExpandedThreads(p => ({...p, [post.id]: !isExpanded}))} style={styles.actionLink}>
                       💬 {post.comments.length} Comments
                     </button>
                     <button style={styles.actionLink}>🔗 Share</button>
-
-                    {/* DYNAMIC ADMINISTRATIVE WIPE COMMAND ACTIVATOR */}
-                    {isAdminMode && (
-                      <button 
-                        onClick={() => handleRemovePost(post.id)} 
-                        style={styles.adminPurgeBtn}
-                        title="Purge thread from memory disks"
-                      >
-                        ⚠️ PURGE THREAD
-                      </button>
-                    )}
                   </div>
 
-                  {/* DISCUSSION COMMENTS ACCORDION INTERFACE */}
                   {isExpanded && (
                     <div style={styles.commentSection}>
                       <form onSubmit={(e) => handleCommentSubmit(e, post.id)} style={styles.commentForm}>
@@ -388,18 +390,11 @@ const styles = {
   navActions: { display: 'flex', alignItems: 'center', gap: '14px' },
   
   btnCreate: { backgroundColor: '#2563eb', color: '#fff', border: 'none', padding: '8px 18px', borderRadius: '20px', fontWeight: '600', fontSize: '0.85rem', cursor: 'pointer', boxShadow: '0 4px 12px rgba(37, 99, 235, 0.2)', transition: 'all 0.2s' },
-  btnCreateAdmin: { backgroundColor: '#ef4444', color: '#fff', border: 'none', padding: '8px 18px', borderRadius: '20px', fontWeight: '600', fontSize: '0.85rem', cursor: 'pointer', boxShadow: '0 4px 12px rgba(239, 68, 68, 0.3)', transition: 'all 0.2s' },
-
-  adminBadgeDisabled: { backgroundColor: '#1e293b', color: '#94a3b8', border: '1px solid #334155', padding: '7px 14px', borderRadius: '20px', fontSize: '0.82rem', fontWeight: '600', cursor: 'pointer', transition: 'all 0.2s' },
-  adminBadgeActive: { backgroundColor: 'rgba(239, 68, 68, 0.15)', color: '#ef4444', border: '1px solid rgba(239, 68, 68, 0.4)', padding: '7px 14px', borderRadius: '20px', fontSize: '0.82rem', fontWeight: '700', cursor: 'pointer', boxShadow: '0 0 15px rgba(239,68,68,0.2)' },
-  adminPurgeBtn: { background: 'none', border: 'none', color: '#f43f5e', fontSize: '0.82rem', fontWeight: '700', cursor: 'pointer', marginLeft: 'auto', letterSpacing: '0.02em' },
   userTag: { fontSize: '0.85rem', color: '#94a3b8', fontWeight: '600' },
   btnExit: { background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', fontSize: '0.85rem' },
   
   modalOverlay: { position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(5, 8, 15, 0.75)', backdropFilter: 'blur(10px)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000, animation: 'fadeIn 0.2s ease-out' },
-  
   glassFormCard: { background: '#111827', border: '1px solid #374151', padding: '24px', borderRadius: '16px', display:'flex', flexDirection:'column', gap:'16px', width: '100%', maxWidth: '600px', boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.7)', transform: 'translateY(0)', animation: 'slideUp 0.3s cubic-bezier(0.34, 1.56, 0.64, 1)' },
-  glassFormCardAdmin: { background: '#171216', border: '1px solid rgba(239, 68, 68, 0.3)', padding: '24px', borderRadius: '16px', display:'flex', flexDirection:'column', gap:'16px', width: '100%', maxWidth: '600px', boxShadow: '0 25px 50px -12px rgba(239, 68, 68, 0.15)', transform: 'translateY(0)', animation: 'slideUp 0.3s cubic-bezier(0.34, 1.56, 0.64, 1)' },
   
   modalHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #1f2937', paddingBottom: '14px' },
   avatarCircle: { width: '38px', height: '38px', borderRadius: '50%', backgroundColor: '#3b82f6', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: '700', fontSize: '0.95rem' },
@@ -449,7 +444,6 @@ const styles = {
   form: { display: 'flex', flexDirection: 'column', gap: '14px' },
   input: { padding: '10px 14px', borderRadius: '8px', border: '1px solid #222f43', backgroundColor: '#090d16', color: '#fff', outline: 'none', fontSize: '0.9rem' },
   btnPrimary: { padding: '10px 22px', backgroundColor: '#2563eb', color: '#fff', border: 'none', borderRadius: '20px', fontWeight: '600', fontSize: '0.88rem', cursor: 'pointer' },
-  btnPrimaryAdmin: { padding: '10px 22px', backgroundColor: '#ef4444', color: '#fff', border: 'none', borderRadius: '20px', fontWeight: '700', fontSize: '0.88rem', cursor: 'pointer', boxShadow: '0 4px 15px rgba(239, 68, 68, 0.3)' },
   toggleLink: { color: '#38bdf8', fontSize: '0.82rem', cursor: 'pointer', marginTop: '12px', textDecoration: 'underline', textAlign: 'center' }
 };
 
