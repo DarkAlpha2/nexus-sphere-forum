@@ -1,6 +1,15 @@
 const express = require('express');
 const cors = require('cors');
 const { Pool } = require('pg');
+// Automatically create users table if it doesn't exist
+pool.query(`
+  CREATE TABLE IF NOT EXISTS users (
+    id SERIAL PRIMARY KEY,
+    username VARCHAR(255) UNIQUE NOT NULL,
+    password VARCHAR(255) NOT NULL
+  );
+`).then(() => console.log("🟢 SYSTEM CHECK: 'users' table verified/created."))
+  .catch(err => console.error("🔴 SYSTEM CHECK FAILED:", err));
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 require('dotenv').config();
