@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 
-const BACKEND_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+const BACKEND_URL = import.meta.env.DATABASE_URL || 'https://nexus-sphere-backend.onrender.com';
 const CATEGORIES = ['🚀 Startups', '💰 Finance', '📈 Marketing', '🤖 Tech & AI', '☕ Lounge'];
 
 function App() {
