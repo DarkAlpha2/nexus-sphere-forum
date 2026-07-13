@@ -14,11 +14,10 @@ app.use(express.json());
 const JWT_SECRET = process.env.JWT_SECRET || 'super_secret_nexus_key_123';
 
 const pool = new Pool({
-  user: 'postgres',
-  host: 'localhost',
-  database: 'forum_db',
-  password: '1234', // Put your simple password here
-  port: 5432,
+  connectionString: process.env.DATABASE_URL,
+  ssl: {
+    rejectUnauthorized: false // This prevents live cloud connection rejections
+  }
 });
 
 // ==========================================
@@ -48,9 +47,9 @@ app.post('/api/register', async (req, res) => {
     );
 
     res.status(201).json({ message: 'User registered successfully!' });
-  } catch (err) {
-    console.error(err.message);
-    res.status(500).send('Server Error');
+  } catch (error) {
+    console.error("REGISTRATION DATABASE ERROR:", error); // <-- Add this!
+    res.status(500).json({ error: 'Authentication Failed', details: error.message });
   }
 });
 
@@ -180,9 +179,10 @@ app.post('/api/posts/:id/comments', async (req, res) => {
   }
 });
 
-const PORT = process.env.PORT || 5000;
+const PORT = process.env.PORT || 5000; 
+
 app.listen(PORT, () => {
-  console.log(`Server is running with secure Auth on http://localhost:${PORT}`);
+  console.log(`Server running on port ${PORT}`);
 });
 
 // FETCH ALL POSTS WITH SCORES
