@@ -140,15 +140,19 @@ app.post('/api/login', async (req, res) => {
 // CORE FORUM ROUTES
 // ==========================================
 
-// FETCH ALL POSTS WITH SCORES AND COMMENTS
+// FETCH ALL ACTIVE POSTS WITH SCORES AND COMMENTS (FIXED DUPLICATION)
 app.get('/api/posts', async (req, res) => {
   try {
     const result = await pool.query(`
       SELECT p.id, p.username, p.title, p.content, p.category, p.image_url, p.score, p.created_at,
-             COALESCE(json_agg(c.* ORDER BY c.created_at ASC) FILTER (WHERE c.id IS NOT NULL), '[]') AS comments
+             COALESCE(
+               (SELECT json_agg(c.* ORDER BY c.created_at ASC) 
+                FROM comments c 
+                WHERE c.post_id = p.id), 
+               '[]'
+             ) AS comments
       FROM posts p
-      LEFT JOIN comments c ON p.id = c.post_id
-      GROUP BY p.id, p.username, p.title, p.content, p.category, p.image_url, p.score, p.created_at
+      WHERE p.is_deleted = FALSE OR p.is_deleted IS NULL
       ORDER BY p.score DESC, p.created_at DESC;
     `);
     res.json(result.rows);
