@@ -40,11 +40,9 @@ function App() {
 
   const fetchPosts = async () => {
     try {
-      // Adjusted to try matching your backend's expected endpoints
       const response = await axios.get(`${BACKEND_URL}/api/posts`);
       setPosts(response.data.map(p => ({ ...p, comments: p.comments || [] })));
     } catch (error) {
-      // Fallback try if your backend mounts posts directly at root without /api
       try {
         const response = await axios.get(`${BACKEND_URL}/posts`);
         setPosts(response.data.map(p => ({ ...p, comments: p.comments || [] })));
@@ -88,7 +86,6 @@ function App() {
       setTitle(''); setContent(''); setImageUrl(''); setShowCreateForm(false);
       fetchPosts();
     } catch (error) {
-      // Fallback to non-API route if your backend setup requires it
       try {
         await axios.post(`${BACKEND_URL}/posts`, postPayload);
         setTitle(''); setContent(''); setImageUrl(''); setShowCreateForm(false);
@@ -102,22 +99,20 @@ function App() {
 
   // REMOVING THREADS
   const handleRemovePost = async (postId) => {
-  if (!window.confirm("CRITICAL WARNING: Are you certain you want to purge this entire thread node?")) return;
-  
-  // Pulls the secret token out of your browser's local storage
-  const secretToken = localStorage.getItem('nexus_admin_token') || '';
+    if (!window.confirm("CRITICAL WARNING: Are you certain you want to purge this entire thread node?")) return;
+    
+    const secretToken = localStorage.getItem('nexus_admin_token') || '';
 
-  try {
-    await axios.delete(`${BACKEND_URL}/api/posts/${postId}`, {
-      headers: { 'x-admin-secret': secretToken }
-    });
-    fetchPosts();
-  } catch (error) {
-    console.error("Purging action failed", error);
-    alert("Action Denied: You do not have admin powers on this device.");
-  }
-};
-
+    try {
+      await axios.delete(`${BACKEND_URL}/api/posts/${postId}`, {
+        headers: { 'x-admin-secret': secretToken }
+      });
+      fetchPosts();
+    } catch (error) {
+      console.error("Purging action failed", error);
+      alert("Action Denied: You do not have admin powers on this device.");
+    }
+  };
 
   const handleCommentSubmit = async (e, postId) => {
     e.preventDefault();
@@ -229,7 +224,6 @@ function App() {
             <input type="text" placeholder="Search threads, discussions, or topics..." style={styles.searchBar} />
           </div>
           <div style={styles.navActions}>
-            {/* ADMIN BUTTON PERMANENTLY REMOVED FROM PUBLIC VIEW HERE */}
             <button onClick={() => setShowCreateForm(true)} style={styles.btnCreate}>
               + Create Post
             </button>
@@ -320,27 +314,22 @@ function App() {
                 </div>
 
                 <div style={styles.cardMainContent}>
+                  {/* METADATA CONTAINER FIXED (SINGLE WRAPPER ONLY) */}
                   <div style={styles.cardMetadata}>
-                  <div style={styles.cardMetadata}>
-  <span style={styles.categoryPill}>{post.category}</span>
-  <span>Posted by <strong style={{ color: '#cbd5e1' }}>u/{post.username}</strong></span>
-  <span>•</span>
-  <span>{new Date(post.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
-  
-  {/* 👇 PASTE THE SECRET ADMIN BUTTON RIGHT HERE 👇 */}
-  {localStorage.getItem('nexus_admin_token') === 'my_ultra_secret_admin_password_123' && (
-    <button 
-      onClick={() => handleRemovePost(post.id)} 
-      style={{ color: '#ef4444', background: 'none', border: 'none', cursor: 'pointer', fontSize: '0.75rem', fontWeight: 'bold', marginLeft: 'auto' }}
-    >
-      [🗑️ PURGE POST]
-    </button>
-  )}
-</div>
                     <span style={styles.categoryPill}>{post.category}</span>
                     <span>Posted by <strong style={{ color: '#cbd5e1' }}>u/{post.username}</strong></span>
                     <span>•</span>
                     <span>{new Date(post.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
+                    
+                    {/* SECRET DEVICE ADMIN POWER PURGE BUTTON */}
+                    {localStorage.getItem('nexus_admin_token') === 'my_ultra_secret_admin_password_123' && (
+                      <button 
+                        onClick={() => handleRemovePost(post.id)} 
+                        style={{ color: '#ef4444', background: 'none', border: 'none', cursor: 'pointer', fontSize: '0.75rem', fontWeight: 'bold', marginLeft: 'auto' }}
+                      >
+                        [🗑️ PURGE POST]
+                      </button>
+                    )}
                   </div>
                   
                   <h2 style={styles.cardTitle}>{post.title}</h2>
@@ -354,7 +343,7 @@ function App() {
 
                   <div style={styles.actionBar}>
                     <button onClick={() => setExpandedThreads(p => ({...p, [post.id]: !isExpanded}))} style={styles.actionLink}>
-                      💬 {post.comments.length} Comments
+                      💬 {post.comments ? post.comments.length : 0} Comments
                     </button>
                     <button style={styles.actionLink}>🔗 Share</button>
                   </div>
@@ -439,7 +428,7 @@ const styles = {
   voteScore: { fontSize: '0.85rem', fontWeight: '700', color: '#f1f5f9' },
   cardMainContent: { padding: '20px' },
   cardMetadata: { display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.75rem', color: '#64748b', marginBottom: '10px' },
-  categoryPill: { backgroundColor: '#1c2635', color: '#38bdf8', padding: '3px 8px', borderRadius: '4px', fontWeight: '600', fontSize: '0.7 stamp' },
+  categoryPill: { backgroundColor: '#1c2635', color: '#38bdf8', padding: '3px 8px', borderRadius: '4px', fontWeight: '600', fontSize: '0.75rem' },
   cardTitle: { margin: '0 0 8px 0', fontSize: '1.25rem', fontWeight: '700', color: '#fff' },
   cardText: { fontSize: '0.96rem', color: '#cbd5e1', lineHeight: '1.55', margin: '0 0 12px 0' },
   mediaFrame: { borderRadius: '8px', overflow: 'hidden', border: '1px solid #222f43', margin: '14px 0', backgroundColor: '#05070c' },
