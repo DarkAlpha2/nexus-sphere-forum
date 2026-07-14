@@ -68,6 +68,12 @@ const initDb = async () => {
 
 // Execute the database check
 initDb();
+// TEMPORARY FIX: Forcefully add the is_deleted column to the existing posts table
+pool.query(`
+  ALTER TABLE posts ADD COLUMN IF NOT EXISTS is_deleted BOOLEAN DEFAULT FALSE;
+`)
+.then(() => console.log("🟢 DATABASE UPDATE: 'is_deleted' column successfully injected into existing 'posts' table."))
+.catch(err => console.error("🔴 DATABASE UPDATE FAILED:", err));
 
 // ==========================================
 // AUTHENTICATION ROUTES (Register & Login)
