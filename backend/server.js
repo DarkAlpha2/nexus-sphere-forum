@@ -20,16 +20,53 @@ const pool = new Pool({
   }
 });
 
-// Automatically create users table if it doesn't exist
-pool.query(`
-  CREATE TABLE IF NOT EXISTS users (
-    id SERIAL PRIMARY KEY,
-    username VARCHAR(255) UNIQUE NOT NULL,
-    password_hash VARCHAR(255) NOT NULL
-  );
-`)
-.then(() => console.log("🟢 SYSTEM CHECK: 'users' table verified/created."))
-.catch(err => console.error("🔴 SYSTEM CHECK FAILED:", err));
+// Automatically create tables if they do not exist
+const initDb = async () => {
+  try {
+    // 1. Create Users Table
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS users (
+        id SERIAL PRIMARY KEY,
+        username VARCHAR(255) UNIQUE NOT NULL,
+        password_hash VARCHAR(255) NOT NULL
+      );
+    `);
+    console.log("🟢 SYSTEM CHECK: 'users' table verified/created.");
+
+    // 2. Create Posts Table
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS posts (
+        id SERIAL PRIMARY KEY,
+        username VARCHAR(255) NOT NULL,
+        title VARCHAR(255) NOT NULL,
+        content TEXT NOT NULL,
+        category VARCHAR(255) NOT NULL DEFAULT '🚀 Startups',
+        image_url TEXT DEFAULT '',
+        score INTEGER DEFAULT 1,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+    console.log("🟢 SYSTEM CHECK: 'posts' table verified/created.");
+
+    // 3. Create Comments Table (linked securely to posts)
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS comments (
+        id SERIAL PRIMARY KEY,
+        post_id INTEGER REFERENCES posts(id) ON DELETE CASCADE,
+        username VARCHAR(255) NOT NULL,
+        content TEXT NOT NULL,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+    console.log("🟢 SYSTEM CHECK: 'comments' table verified/created.");
+
+  } catch (err) {
+    console.error("🔴 SYSTEM CHECK FAILED / DATABASE INITIALIZATION ERROR:", err);
+  }
+};
+
+// Execute the database check
+initDb();
 
 // ==========================================
 // AUTHENTICATION ROUTES (Register & Login)
