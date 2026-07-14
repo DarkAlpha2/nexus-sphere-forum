@@ -33,7 +33,7 @@ const initDb = async () => {
     `);
     console.log("🟢 SYSTEM CHECK: 'users' table verified/created.");
 
-    // 2. Create Posts Table
+    // 2. Create Posts Table (With Virtual Delete Flag)
     await pool.query(`
       CREATE TABLE IF NOT EXISTS posts (
         id SERIAL PRIMARY KEY,
@@ -43,6 +43,7 @@ const initDb = async () => {
         category VARCHAR(255) NOT NULL DEFAULT '🚀 Startups',
         image_url TEXT DEFAULT '',
         score INTEGER DEFAULT 1,
+        is_deleted BOOLEAN DEFAULT FALSE,
         created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
       );
     `);
@@ -139,7 +140,7 @@ app.post('/api/login', async (req, res) => {
 // CORE FORUM ROUTES
 // ==========================================
 
-// FETCH ALL POSTS WITH SCORES AND COMMENTS
+// FETCH ALL ACTIVE POSTS WITH SCORES AND COMMENTS
 app.get('/api/posts', async (req, res) => {
   try {
     const result = await pool.query(`
@@ -147,6 +148,7 @@ app.get('/api/posts', async (req, res) => {
              COALESCE(json_agg(c.* ORDER BY c.created_at ASC) FILTER (WHERE c.id IS NOT NULL), '[]') AS comments
       FROM posts p
       LEFT JOIN comments c ON p.id = c.post_id
+      WHERE p.is_deleted = FALSE OR p.is_deleted IS NULL
       GROUP BY p.id, p.username, p.title, p.content, p.category, p.image_url, p.score, p.created_at
       ORDER BY p.score DESC, p.created_at DESC;
     `);
@@ -208,7 +210,7 @@ app.patch('/api/posts/:id/vote', async (req, res) => {
     const result = await pool.query(
       `UPDATE posts 
        SET score = score + $1 
-       WHERE id = $2 
+       WHERE id = $2 AND (is_deleted = FALSE OR is_deleted IS NULL)
        RETURNING *`,
       [voteValue, id]
     );
@@ -224,22 +226,22 @@ app.patch('/api/posts/:id/vote', async (req, res) => {
   }
 });
 
-// ADMINISTRATIVE DELETE ROUTE
+// ADMINISTRATIVE SOFT-DELETE ROUTE (VIRTUAL DELETE)
 app.delete('/api/posts/:id', async (req, res) => {
   try {
     const { id } = req.params;
     
-    // First, clear associated comments to satisfy foreign key constraints
-    await pool.query('DELETE FROM comments WHERE post_id = $1', [id]);
-    
-    // Delete the target post
-    const result = await pool.query('DELETE FROM posts WHERE id = $1 RETURNING *', [id]);
+    // Instead of deleting the row data directly, flag it as deleted
+    const result = await pool.query(
+      'UPDATE posts SET is_deleted = TRUE WHERE id = $1 RETURNING *', 
+      [id]
+    );
     
     if (result.rows.length === 0) {
       return res.status(404).json({ message: "Thread node not found." });
     }
     
-    res.json({ message: "Thread node securely terminated from database.", deletedPost: result.rows[0] });
+    res.json({ message: "Thread node securely archived and virtually hidden.", deletedPost: result.rows[0] });
   } catch (err) {
     console.error(err.message);
     res.status(500).send('Administrative Server Error');
