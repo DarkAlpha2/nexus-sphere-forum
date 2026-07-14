@@ -102,19 +102,22 @@ function App() {
 
   // REMOVING THREADS
   const handleRemovePost = async (postId) => {
-    if (!window.confirm("CRITICAL WARNING: Are you certain you want to purge this entire thread node?")) return;
-    try {
-      await axios.delete(`${BACKEND_URL}/api/posts/${postId}`);
-      fetchPosts();
-    } catch (error) {
-      try {
-        await axios.delete(`${BACKEND_URL}/posts/${postId}`);
-        fetchPosts();
-      } catch (err) {
-        console.error("Purging action failed", err);
-      }
-    }
-  };
+  if (!window.confirm("CRITICAL WARNING: Are you certain you want to purge this entire thread node?")) return;
+  
+  // Pulls the secret token out of your browser's local storage
+  const secretToken = localStorage.getItem('nexus_admin_token') || '';
+
+  try {
+    await axios.delete(`${BACKEND_URL}/api/posts/${postId}`, {
+      headers: { 'x-admin-secret': secretToken }
+    });
+    fetchPosts();
+  } catch (error) {
+    console.error("Purging action failed", error);
+    alert("Action Denied: You do not have admin powers on this device.");
+  }
+};
+
 
   const handleCommentSubmit = async (e, postId) => {
     e.preventDefault();
@@ -318,6 +321,22 @@ function App() {
 
                 <div style={styles.cardMainContent}>
                   <div style={styles.cardMetadata}>
+                  <div style={styles.cardMetadata}>
+  <span style={styles.categoryPill}>{post.category}</span>
+  <span>Posted by <strong style={{ color: '#cbd5e1' }}>u/{post.username}</strong></span>
+  <span>•</span>
+  <span>{new Date(post.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
+  
+  {/* 👇 PASTE THE SECRET ADMIN BUTTON RIGHT HERE 👇 */}
+  {localStorage.getItem('nexus_admin_token') === 'my_ultra_secret_admin_password_123' && (
+    <button 
+      onClick={() => handleRemovePost(post.id)} 
+      style={{ color: '#ef4444', background: 'none', border: 'none', cursor: 'pointer', fontSize: '0.75rem', fontWeight: 'bold', marginLeft: 'auto' }}
+    >
+      [🗑️ PURGE POST]
+    </button>
+  )}
+</div>
                     <span style={styles.categoryPill}>{post.category}</span>
                     <span>Posted by <strong style={{ color: '#cbd5e1' }}>u/{post.username}</strong></span>
                     <span>•</span>

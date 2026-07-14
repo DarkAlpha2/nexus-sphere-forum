@@ -247,6 +247,34 @@ app.delete('/api/posts/:id', async (req, res) => {
   }
 });
 
+// ADMINISTRATIVE SOFT-DELETE ROUTE (VIRTUAL DELETE WITH HARDCODED PASSPHRASE CHK)
+app.delete('/api/posts/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const adminSecret = req.headers['x-admin-secret'];
+
+    // Replace 'my_ultra_secret_admin_password_123' with any secret key you want
+    if (adminSecret !== 'my_ultra_secret_admin_password_123') {
+      return res.status(403).json({ error: "Access Denied: Insufficient administrative clearance." });
+    }
+    
+    // Flag item as deleted virtually
+    const result = await pool.query(
+      'UPDATE posts SET is_deleted = TRUE WHERE id = $1 RETURNING *', 
+      [id]
+    );
+    
+    if (result.rows.length === 0) {
+      return res.status(404).json({ message: "Thread node not found." });
+    }
+    
+    res.json({ message: "Thread node securely archived and virtually hidden.", deletedPost: result.rows[0] });
+  } catch (err) {
+    console.error(err.message);
+    res.status(500).send('Administrative Server Error');
+  }
+});
+
 // ==========================================
 // SERVER INITIALIZATION
 // ==========================================
