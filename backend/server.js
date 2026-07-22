@@ -357,13 +357,13 @@ app.delete('/api/posts/:id', async (req, res) => {
 });
 
 // ==========================================
-// MANUAL EMERGENCY SEED ROUTE
+// MANUAL EMERGENCY SEED ROUTE (POSTS + COMMENTS)
 // ==========================================
 app.get('/api/seed', async (req, res) => {
   try {
-    console.log("🧹 Wiping old posts and seeding 75 new nodes...");
-    
-    // 1. Re-create tables if missing
+    console.log("🧹 Wiping old data and seeding 75 posts with realistic comments...");
+
+    // 1. Re-verify tables
     await pool.query(`
       CREATE TABLE IF NOT EXISTS posts (
         id SERIAL PRIMARY KEY,
@@ -391,16 +391,46 @@ app.get('/api/seed', async (req, res) => {
     // 2. Clear out existing rows safely
     await pool.query('TRUNCATE TABLE comments, posts RESTART IDENTITY CASCADE;');
 
-    // 3. Insert all SEED_POSTS
-    for (const node of SEED_POSTS) {
-      await pool.query(
+    // 3. Pool of realistic founder comment templates
+    const sampleComments = [
+      { username: "anand_tech_lead", text: "Spot on! We faced the exact same issue last quarter. Solving this saved us tons of dev hours." },
+      { username: "priya_product_mgr", text: "Great insights! How are you handling scalability with this approach?" },
+      { username: "rohan_investor", text: "This is a massive market opportunity in India right now. Would love to connect over DM." },
+      { username: "kavita_growth", text: "Tried this last week and saw an immediate 20% bump in conversions. Thanks for sharing!" },
+      { username: "dev_vanguard", text: "100% agree with your point here. The regulatory landscape makes this even more critical." },
+      { username: "shivam_backend", text: "Interesting approach! Did you consider using Redis caching to optimize this further?" },
+      { username: "tanvi_designer", text: "UX perspective: Keeping the interface minimal really helps Tier-2/Tier-3 user adoption." }
+    ];
+
+    // 4. Insert posts and append 2 realistic comments to each post
+    for (let i = 0; i < SEED_POSTS.length; i++) {
+      const node = SEED_POSTS[i];
+      
+      // Insert Post
+      const postResult = await pool.query(
         `INSERT INTO posts (username, title, content, category, score) 
-         VALUES ($1, $2, $3, $4, $5)`,
+         VALUES ($1, $2, $3, $4, $5) RETURNING id`,
         [node.username, node.title, node.content, node.category, node.score]
+      );
+
+      const postId = postResult.rows[0].id;
+
+      // Select 2 comments based on post index
+      const comment1 = sampleComments[i % sampleComments.length];
+      const comment2 = sampleComments[(i + 3) % sampleComments.length];
+
+      await pool.query(
+        `INSERT INTO comments (post_id, username, content) VALUES ($1, $2, $3)`,
+        [postId, comment1.username, comment1.text]
+      );
+
+      await pool.query(
+        `INSERT INTO comments (post_id, username, content) VALUES ($1, $2, $3)`,
+        [postId, comment2.username, comment2.text]
       );
     }
 
-    res.json({ success: true, message: "Successfully seeded 75 posts into PostgreSQL!" });
+    res.json({ success: true, message: "Successfully seeded 75 posts and 150 comments into PostgreSQL!" });
   } catch (err) {
     console.error("SEEDING FAILED:", err);
     res.status(500).json({ success: false, error: err.message });
